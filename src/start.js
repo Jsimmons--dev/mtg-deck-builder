@@ -1,115 +1,108 @@
-import {MongoClient, ObjectId} from 'mongodb'
-import express from 'express'
-import bodyParser from 'body-parser'
-import {graphqlExpress, graphiqlExpress} from 'graphql-server-express'
-import {makeExecutableSchema} from 'graphql-tools'
-import cors from 'cors'
-import {prepare} from "../util/index"
+import { MongoClient, ObjectId } from "mongodb";
+import express from "express";
+import bodyParser from "body-parser";
+import { graphqlExpress, graphiqlExpress } from "graphql-server-express";
+import { makeExecutableSchema } from "graphql-tools";
+import cors from "cors";
+import { prepare } from "../util/index";
 
+const app = express();
 
-const app = express()
+app.use(cors());
 
-app.use(cors())
-
-const homePath = '/graphiql'
-const URL = 'http://localhost'
-const PORT = 3001
-const MONGO_URL = 'mongodb://localhost:27017/blog'
-
-
+const homePath = "/graphiql";
+const URL = "http://localhost";
+const PORT = 3001;
+const MONGO_URL = "mongodb://localhost:27018/test";
 
 export const start = async () => {
   try {
-    const db = await MongoClient.connect(MONGO_URL)
+    const db = await MongoClient.connect(MONGO_URL);
 
-    const Posts = db.collection('posts')
-    const Comments = db.collection('comments')
+    const Cards = db.collection("scryfall-default-cards");
 
-    const typeDefs = [`
+    const typeDefs = [
+      `
       type Query {
-        post(_id: String): Post
-        posts: [Post]
-        comment(_id: String): Comment
+        card(_id: String): Card
+        cards(name: String, cmc:Int): [Card]
       }
 
-      type Post {
+      type ImageMap {
+        small: String
+        normal: String
+        large: String
+        png: String
+        art_crop: String
+        border_crop: String
+      }
+
+      type Card {
         _id: String
-        title: String
-        content: String
-        comments: [Comment]
+        name: String
+        object: String
+        oracle_id: String
+        lang: String
+        released_at: String
+        uri: String
+        scryfall_uri: String
+        layout: String
+        highres_image: Boolean
+        image_uris: ImageMap
+        mana_cost: String
+        cmc: Int
+        type_line: String
+        oracle_text: String
+        power: String
+        toughness: String
+        colors: [String]
+        color_identity: [String]
+        legalities: [String]
+        artist: String
+        card_back_id: String
+        flavor_text: String
+        rarity: String
       }
 
-      type Comment {
-        _id: String
-        postId: String
-        content: String
-        post: Post
-      }
-
-      type Mutation {
-        createPost(title: String, content: String): Post
-        createComment(postId: String, content: String): Comment
-      }
 
       schema {
         query: Query
-        mutation: Mutation
       }
-    `];
+    `
+    ];
 
     const resolvers = {
       Query: {
-        post: async (root, {_id}) => {
-          return prepare(await Posts.findOne(ObjectId(_id)))
+        card: async (root, { _id }) => {
+          return prepare(await Cards.findOne(ObjectId(_id)));
         },
-        posts: async () => {
-          return (await Posts.find({}).toArray()).map(prepare)
-        },
-        comment: async (root, {_id}) => {
-          return prepare(await Comments.findOne(ObjectId(_id)))
-        },
-      },
-      Post: {
-        comments: async ({_id}) => {
-          return (await Comments.find({postId: _id}).toArray()).map(prepare)
+        cards: async (root, stuff) => {
+          console.log(root, stuff);
+
+          return (await Cards.find(stuff).toArray()).map(prepare);
         }
       },
-      Comment: {
-        post: async ({postId}) => {
-          return prepare(await Posts.findOne(ObjectId(postId)))
-        }
-      },
-      Mutation: {
-        createPost: async (root, args, context, info) => {
-          const res = await Posts.insertOne(args)
-          return prepare(res.ops[0])  // https://mongodb.github.io/node-mongodb-native/3.1/api/Collection.html#~insertOneWriteOpResult
-        },
-        createComment: async (root, args) => {
-          const res = await Comments.insert(args)
-          return prepare(await Comments.findOne({_id: res.insertedIds[1]}))
-        },
-      },
-    }
+      Card: {}
+    };
 
     const schema = makeExecutableSchema({
       typeDefs,
       resolvers
-    })
+    });
 
+    app.use("/graphql", bodyParser.json(), graphqlExpress({ schema }));
 
-    app.use('/graphql', bodyParser.json(), graphqlExpress({schema}))
-
-
-    app.use(homePath, graphiqlExpress({
-      endpointURL: '/graphql'
-    }))
+    app.use(
+      homePath,
+      graphiqlExpress({
+        endpointURL: "/graphql"
+      })
+    );
 
     app.listen(PORT, () => {
-      console.log(`Visit ${URL}:${PORT}${homePath}`)
-    })
-
+      console.log(`Visit ${URL}:${PORT}${homePath}`);
+    });
   } catch (e) {
-    console.log(e)
+    console.log(e);
   }
-
-}
+};
